@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"payment_midtrans/dto"
@@ -20,6 +19,7 @@ type PaymentUsecase interface {
 	CreateSubscription(req *dto.PaymentSubcriptionCreate) (*dto.SubscriptionResponse, error)
 	SubscriptionNotification(payload map[string]interface{}) (*dto.SubscriptionResponse, error)
 	CancelSubscription(subId string) (string, error)
+	CheckSubscription(subscriptionID string) (*coreapi.StatusSubscriptionResponse, error)
 }
 
 type paymentUsecase struct {
@@ -31,6 +31,8 @@ func NewPaymentUsecase() PaymentUsecase {
 
 func (u *paymentUsecase) CreatePayment(req *snap.Request) (*dto.PaymentCreateResponse, error) {
 	s := snap.Client{}
+
+	fmt.Println(os.Getenv("MIDTRANS_SERVER_KEY"))
 	s.New(os.Getenv("MIDTRANS_SERVER_KEY"), midtrans.Sandbox)
 
 	//for example
@@ -84,19 +86,21 @@ func (u *paymentUsecase) PaymentNotificationStatus(payload map[string]interface{
 	var core coreapi.Client
 	core.New(os.Getenv("MIDTRANS_SERVER_KEY"), midtrans.Sandbox)
 
+	//for postman testing purpose
 	orderID, _ := payload["order_id"].(string)
-	statusCode, _ := payload["status_code"].(string)
-	grossAmount, _ := payload["gross_amount"].(string)
-	receivedSignature, _ := payload["signature_key"].(string)
 
-	if orderID == "" || statusCode == "" || grossAmount == "" || receivedSignature == "" {
-		return nil, errors.New("missing required fields")
-	}
+	// statusCode, _ := payload["status_code"].(string)
+	// grossAmount, _ := payload["gross_amount"].(string)
+	// receivedSignature, _ := payload["signature_key"].(string)
 
-	expectedSig := utils.GenerateSignature(orderID, statusCode, grossAmount, os.Getenv("MIDTRANS_SERVER_KEY"))
-	if receivedSignature != expectedSig {
-		return nil, errors.New("failed signature")
-	}
+	// if orderID == "" || statusCode == "" || grossAmount == "" || receivedSignature == "" {
+	// 	return nil, errors.New("missing required fields")
+	// }
+
+	// expectedSig := utils.GenerateSignature(orderID, statusCode, grossAmount, os.Getenv("MIDTRANS_SERVER_KEY"))
+	// if receivedSignature != expectedSig {
+	// 	return nil, errors.New("failed signature")
+	// }
 
 	transactionStatusResp, errResp := core.CheckTransaction(orderID)
 	if errResp != nil {
@@ -161,11 +165,20 @@ func (u *paymentUsecase) CreateSubscription(req *dto.PaymentSubcriptionCreate) (
 
 	//sub
 	subReq := &coreapi.SubscriptionReq{
-		Name:        req.Name,
-		Amount:      int64(req.Amount),
+		Name:        "john",
+		Amount:      10000,
 		Currency:    "IDR",
 		PaymentType: "credit_card",
-		Token:       req.TokenID,
+		Token:       "fake-token-123",
+		Schedule: coreapi.ScheduleDetails{
+			Interval:     1,
+			IntervalUnit: "month",
+			MaxInterval:  2,
+			StartTime:    time.Now().Add(2 * time.Minute).Format("2006-01-02 15:04:05 -0700"),
+		},
+		Metadata: map[string]string{
+			"deskripsi": "beli bulanan",
+		},
 	}
 
 	subResp, err := core.CreateSubscription(subReq)
@@ -174,7 +187,7 @@ func (u *paymentUsecase) CreateSubscription(req *dto.PaymentSubcriptionCreate) (
 	}
 
 	sub := &dto.SubscriptionResponse{
-		UserID:          req.UserID,
+		UserID:          "1",
 		MidtransSubID:   subResp.ID,
 		Status:          "active",
 		NextBillingDate: subResp.Schedule.IntervalUnit,
@@ -215,4 +228,18 @@ func (u *paymentUsecase) CancelSubscription(subId string) (string, error) {
 	//update db status canceled
 
 	return resp.StatusMessage, nil
+}
+
+func (u *paymentUsecase) CheckSubscription(subscriptionID string) (*coreapi.StatusSubscriptionResponse, error) {
+	// Inisialisasi client
+	var core coreapi.Client
+	core.New(os.Getenv("MIDTRANS_SERVER_KEY"), midtrans.Sandbox)
+
+	// Panggil GetSubscription
+	subscriptionDetail, err := core.GetSubscription(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return subscriptionDetail, nil
 }

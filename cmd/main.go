@@ -8,10 +8,14 @@ import (
 	"payment_midtrans/internal/usecase"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 func main() {
 
+	if err := godotenv.Load(); err != nil {
+		log.Fatal(err)
+	}
 	// Setup routes
 	payH := handler.NewPaymentHandler(usecase.NewPaymentUsecase())
 
@@ -22,7 +26,8 @@ func main() {
 
 	r.HandleFunc("/payment/subcription", payH.CreateSubscription).Methods(http.MethodPost)
 	r.HandleFunc("/payment/subcription/notification", payH.SubscriptionNotification).Methods(http.MethodPost)
-	r.HandleFunc("/payment/subcription/cancel", payH.CancelSubscription).Methods(http.MethodPost)
+	r.HandleFunc("/payment/subcription/cancel/{subId}", payH.CancelSubscription).Methods(http.MethodPost)
+	r.HandleFunc("/payment/subcription/status/{subId}", payH.CancelSubscription).Methods(http.MethodPost)
 	//the port must be same on ngrok port 8080
 	port := os.Getenv("PORT")
 	if port == "" {

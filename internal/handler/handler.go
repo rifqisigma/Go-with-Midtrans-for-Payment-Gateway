@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"payment_midtrans/dto"
 	"payment_midtrans/internal/usecase"
@@ -38,9 +39,14 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 
 func (h *PaymentHandler) PaymentNotification(w http.ResponseWriter, r *http.Request) {
 
-	var payload map[string]interface{}
-	err := json.NewDecoder(r.Body).Decode(&payload)
+	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
 		utils.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -110,4 +116,16 @@ func (h *PaymentHandler) CancelSubscription(w http.ResponseWriter, r *http.Reque
 	utils.WriteJson(w, http.StatusOK, map[string]string{
 		"message": response,
 	})
+}
+
+func (h *PaymentHandler) GetStatusSubscription(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	paramsId := params["subId"]
+
+	response, err := h.payUC.CheckSubscription(paramsId)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err.Error())
+	}
+
+	utils.WriteJson(w, http.StatusOK, response)
 }
